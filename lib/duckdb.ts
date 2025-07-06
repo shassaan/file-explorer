@@ -38,13 +38,8 @@ export async function initDuckDB(): Promise<{ db: AsyncDuckDB, conn: AsyncDuckDB
   try {
     console.log('Initializing DuckDB WASM...');
     
-    // Use local bundles for DuckDB WASM
+    // Use only the MVP bundle for DuckDB WASM
     const bundles = {
-      eh: {
-        mainModule: '/duckdb/duckdb-eh.wasm',
-        mainWorker: '/duckdb/duckdb-browser-eh.worker.js',
-        pthreadWorker: null,
-      },
       mvp: {
         mainModule: '/duckdb/duckdb-mvp.wasm',
         mainWorker: '/duckdb/duckdb-browser-mvp.worker.js',
@@ -53,21 +48,21 @@ export async function initDuckDB(): Promise<{ db: AsyncDuckDB, conn: AsyncDuckDB
     };
     
     console.log('Selecting DuckDB bundle...');
-    const bundle = await selectBundle(bundles);
-    console.log('Selected bundle:', bundle);
+    const bundleSelected = await selectBundle(bundles);
+    console.log('Selected bundle:', bundleSelected);
 
     // Create a logger and worker for DuckDB
     const logger = new ConsoleLogger();
-    if (!bundle.mainWorker) throw new Error('No mainWorker found in selected DuckDB bundle');
+    if (!bundleSelected.mainWorker) throw new Error('No mainWorker found in selected DuckDB bundle');
     
     console.log('Creating DuckDB worker...');
-    const worker = new Worker(bundle.mainWorker as string);
+    const worker = new Worker(bundleSelected.mainWorker as string);
     
     console.log('Creating AsyncDuckDB instance...');
     db = new AsyncDuckDB(logger, worker);
     
     console.log('Instantiating DuckDB...');
-    await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+    await db.instantiate(bundleSelected.mainModule, bundleSelected.pthreadWorker);
     
     console.log('Connecting to DuckDB...');
     conn = await db.connect();
