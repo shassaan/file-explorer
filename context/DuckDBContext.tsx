@@ -26,7 +26,7 @@ interface DuckDBContextType {
   
   // Actions
   initializeDuckDB: () => Promise<void>;
-  registerFile: (file: File) => Promise<void>;
+  registerFile: (file: File, sheetName?: string) => Promise<void>;
   executeQuery: (sql: string) => Promise<void>;
   clearError: () => void;
   removeTable: (tableName: string) => Promise<void>;
@@ -78,7 +78,7 @@ export function DuckDBProvider({ children }: DuckDBProviderProps) {
     }
   };
 
-  const registerFile = async (file: File) => {
+  const registerFile = async (file: File, sheetName?: string) => {
     if (!isInitialized) {
       setError('DuckDB not initialized');
       return;
@@ -97,7 +97,7 @@ export function DuckDBProvider({ children }: DuckDBProviderProps) {
         setTables(prev => prev.filter(t => t.name !== tableName));
       }
 
-      await registerFileAsTable(file, tableName);
+      await registerFileAsTable(file, tableName, sheetName);
 
       const newTable: TableInfo = {
         name: tableName,

@@ -79,7 +79,8 @@ export default function FileSelector() {
       const rows = jsonData.slice(1) as unknown[][];
       // Create a new File object for each sheet (simulate per-sheet upload)
       const sheetFile = new File([file], `${file.name.replace(/\.[^.]+$/, '')}_${sheetName}.xlsx`, { type: file.type });
-      await registerFile(sheetFile);
+      // Pass sheetName to registerFile
+      await registerFile(sheetFile, sheetName);
       setSelectedFiles(prev => [...prev, sheetFile]);
     }
     setExcelSheetModal(null);

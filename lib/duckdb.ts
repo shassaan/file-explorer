@@ -83,7 +83,8 @@ export async function initDuckDB(): Promise<{ db: AsyncDuckDB, conn: AsyncDuckDB
 // Helper to register a file as a table in DuckDB
 export async function registerFileAsTable(
   file: File,
-  tableName: string
+  tableName: string,
+  sheetName?: string
 ): Promise<void> {
   if (!db || !conn) throw new Error('DuckDB not initialized');
   const ext = file.name.split('.').pop()?.toLowerCase();
@@ -137,12 +138,12 @@ export async function registerFileAsTable(
     // For Excel files, parse with xlsx library and insert data
     const buffer = await file.arrayBuffer();
     const workbook = XLSX.read(buffer, { type: 'array' });
-    const sheetName = workbook.SheetNames[0]; // Use first sheet
-    const worksheet = workbook.Sheets[sheetName];
+    const targetSheet = sheetName || workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[targetSheet];
     const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
     
     if (jsonData.length === 0) {
-      throw new Error('Excel file is empty or could not be parsed');
+      throw new Error('Excel sheet is empty or could not be parsed');
     }
     
     const headers = jsonData[0] as string[];
@@ -150,7 +151,7 @@ export async function registerFileAsTable(
     
     // Create table with headers
     const columns = headers.map((header) => 
-      `"${header || `column_${headers.indexOf(header)}`}" VARCHAR`
+      `"${header || `column_${headers.indexOf(header)}` }" VARCHAR`
     ).join(', ');
     
     await conn.query(`CREATE TABLE ${tableName} (${columns})`);
