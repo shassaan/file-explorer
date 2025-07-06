@@ -5,7 +5,7 @@ import { useDuckDB } from '../context/DuckDBContext';
 import * as XLSX from 'xlsx';
 
 export default function FileSelector() {
-  const { registerFile, isLoading, error, clearError, tables, removeTable, executeQuery } = useDuckDB();
+  const { registerFile, isLoading, error, clearError, tables, removeTable } = useDuckDB();
   const [isDragOver, setIsDragOver] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [excelSheetModal, setExcelSheetModal] = useState<{
@@ -87,8 +87,6 @@ export default function FileSelector() {
       const worksheet = workbook.Sheets[sheetName];
       const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
       if (jsonData.length === 0) continue;
-      const headers = jsonData[0] as string[];
-      const rows = jsonData.slice(1) as unknown[][];
       // Create a new File object for each sheet (simulate per-sheet upload)
       const sheetFile = new File([file], `${file.name.replace(/\.[^.]+$/, '')}_${sheetName}.xlsx`, { type: file.type });
       // Pass sheetName to registerFile
@@ -112,7 +110,6 @@ export default function FileSelector() {
 
   // Explore file/table details
   const handleExploreFile = async (file: File) => {
-    const ext = file.name.split('.').pop()?.toLowerCase() || '';
     const baseName = file.name.replace(/\.[^.]+$/, '');
     const table = tables.find(t => t.fileName === file.name || t.fileName.startsWith(baseName));
     if (!table) return;
@@ -129,17 +126,17 @@ export default function FileSelector() {
       // Robustly extract column names
       let columns: string[] = [];
       if (Array.isArray(describeRes.rows[0])) {
-        columns = describeRes.rows.map((row: any[]) => row[0]);
-      } else if (typeof describeRes.rows[0] === 'object') {
-        columns = describeRes.rows.map((row: Record<string, any>) => row['column_name'] || Object.values(row)[0]);
+        columns = describeRes.rows.map((row) => String((row as unknown[])[0]));
+      } else if (typeof describeRes.rows[0] === 'object' && describeRes.rows[0] !== null) {
+        columns = describeRes.rows.map((row) => String((row as Record<string, unknown>)['column_name'] ?? Object.values(row ?? {})[0]));
       }
       // Get row count
       const countRes = await executeQueryWithResult(`SELECT COUNT(*) as cnt FROM ${table.name}`);
       let rowCount = 0;
       if (Array.isArray(countRes.rows[0])) {
-        rowCount = countRes.rows[0][0];
-      } else if (typeof countRes.rows[0] === 'object') {
-        rowCount = countRes.rows[0].cnt ?? Object.values(countRes.rows[0])[0];
+        rowCount = Number((countRes.rows[0] as unknown[])[0]);
+      } else if (typeof countRes.rows[0] === 'object' && countRes.rows[0] !== null) {
+        rowCount = Number((countRes.rows[0] as Record<string, unknown>)['cnt'] ?? Object.values(countRes.rows[0] ?? {})[0]);
       }
       setExploreModal({
         file,
@@ -362,7 +359,7 @@ export default function FileSelector() {
                     </button>
                   </div>
                   <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-3 max-h-40 overflow-y-auto border border-gray-200 dark:border-gray-700 text-xs font-mono text-gray-800 dark:text-gray-100 whitespace-pre-wrap select-all">
-                    {exploreModal.details?.columns.map((col, idx) => (
+                    {exploreModal.details?.columns.map((col) => (
                       <div key={col} className="flex items-center group hover:bg-blue-50 dark:hover:bg-blue-900 rounded px-1">
                         <span className="flex-1 break-all">{col}</span>
                         <button
