@@ -1,6 +1,32 @@
 import { AsyncDuckDB, AsyncDuckDBConnection, selectBundle, DuckDBDataProtocol, ConsoleLogger } from '@duckdb/duckdb-wasm';
 import * as XLSX from 'xlsx';
 
+// Helper function to convert BigInt values to serializable types
+function convertBigIntValues(data: unknown): unknown {
+  if (typeof data === 'bigint') {
+    const numValue = Number(data);
+    if (Number.isSafeInteger(numValue)) {
+      return numValue;
+    } else {
+      return data.toString();
+    }
+  }
+  
+  if (Array.isArray(data)) {
+    return data.map(convertBigIntValues);
+  }
+  
+  if (typeof data === 'object' && data !== null) {
+    const converted: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(data)) {
+      converted[key] = convertBigIntValues(value);
+    }
+    return converted;
+  }
+  
+  return data;
+}
+
 // Singleton DuckDB instance and connection
 let db: AsyncDuckDB | null = null;
 let conn: AsyncDuckDBConnection | null = null;
@@ -72,9 +98,41 @@ export async function registerFileAsTable(
   } else if (ext === 'parquet') {
     // For Parquet files, use DuckDB's built-in Parquet reader
     await db.registerFileHandle(`memory://${file.name}`, file, DuckDBDataProtocol.BROWSER_FILEREADER, true);
-    await conn.query(
-      `CREATE TABLE ${tableName} AS SELECT * FROM parquet_scan('memory://${file.name}')`
-    );
+    
+    try {
+      // Use a simpler approach - create table as select but handle BigInt conversion
+      await conn.query(`
+        CREATE TABLE ${tableName} AS 
+        SELECT * FROM parquet_scan('memory://${file.name}')
+      `);
+    } catch (error) {
+      console.error('Error creating table from Parquet:', error);
+      
+             // Fallback: try to create table with explicit BigInt handling
+       const schemaResult = await conn.query(`DESCRIBE parquet_scan('memory://${file.name}')`);
+       const schemaRows = convertBigIntValues(schemaResult.toArray()) as unknown[][];
+      
+      // Convert BigInt columns to VARCHAR to avoid serialization issues
+      const columns = schemaRows.map((row: unknown[]) => {
+        const columnName = row[0] as string;
+        const columnType = row[1] as string;
+        
+        if (columnType.includes('BIGINT') || columnType.includes('HUGEINT')) {
+          return `"${columnName}" VARCHAR`;
+        }
+        return `"${columnName}" ${columnType}`;
+      }).join(', ');
+      
+      await conn.query(`CREATE TABLE ${tableName} (${columns})`);
+      
+      // Insert with CAST to handle BigInt values
+      await conn.query(`
+        INSERT INTO ${tableName} 
+        SELECT * FROM (
+          SELECT * FROM parquet_scan('memory://${file.name}')
+        ) t
+      `);
+    }
   } else if (ext === 'xlsx' || ext === 'xls') {
     // For Excel files, parse with xlsx library and insert data
     const buffer = await file.arrayBuffer();
@@ -129,41 +187,8 @@ export async function runQuery(sql: string): Promise<{ columns: string[]; rows: 
   const columns = result.schema.fields.map((f) => f.name);
   const rows = result.toArray();
   
-  // Convert BigInt values to numbers or strings to avoid serialization issues
-  const serializableRows = rows.map(row => {
-    // Handle different row formats - DuckDB might return objects or arrays
-    if (Array.isArray(row)) {
-      return row.map((value: unknown) => {
-        if (typeof value === 'bigint') {
-          // Convert BigInt to number if it's within safe integer range, otherwise to string
-          const numValue = Number(value);
-          if (Number.isSafeInteger(numValue)) {
-            return numValue;
-          } else {
-            return value.toString();
-          }
-        }
-        return value;
-      });
-    } else if (typeof row === 'object' && row !== null) {
-      // If row is an object, convert BigInt values in the object
-      const convertedRow: Record<string, unknown> = {};
-      for (const [key, value] of Object.entries(row)) {
-        if (typeof value === 'bigint') {
-          const numValue = Number(value);
-          if (Number.isSafeInteger(numValue)) {
-            convertedRow[key] = numValue;
-          } else {
-            convertedRow[key] = value.toString();
-          }
-        } else {
-          convertedRow[key] = value;
-        }
-      }
-      return convertedRow;
-    }
-    return row;
-  });
+  // Convert BigInt values to serializable types
+  const serializableRows = convertBigIntValues(rows) as unknown[];
   
   return { columns, rows: serializableRows };
 } 
