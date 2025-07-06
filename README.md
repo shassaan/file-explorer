@@ -5,12 +5,23 @@ A fully frontend-only Next.js application that uses DuckDB WASM to allow users t
 ## Features
 
 - **Drag & Drop File Upload**: Support for CSV, Parquet, and Excel files
+- **Excel Multi-Sheet Import**: Select and import multiple sheets from Excel files as separate tables
 - **Automatic Table Generation**: Files are automatically registered as DuckDB tables with unique names
+- **File Overwrite & Removal**: Uploading a file with the same name overwrites the previous table; remove files/tables from the UI
+- **File Explorer Modal**: Explore file/table metadata (row count, columns, size, etc.) in a modern popup
 - **SQL Query Editor**: Monaco Editor with SQL syntax highlighting and auto-completion
 - **Modern Results Display**: Paginated table view with sorting and formatting
+- **Column Copy**: Easily copy column names (individually or all) from the explorer modal
 - **Real-time Processing**: All data processing happens in the browser using WebAssembly
+- **Robust BigInt Handling**: Handles large numbers from Parquet/CSV/Excel without serialization errors
 - **Dark Mode Support**: Beautiful UI with light and dark theme support
 - **No Server Required**: Completely static deployment with no backend dependencies
+
+## Screenshots & Demo
+
+<!-- Add screenshots or animated GIFs here -->
+<!-- Example: ![screenshot](public/demo.png) -->
+<!-- Demo: https://your-demo-link.com -->
 
 ## Tech Stack
 
@@ -57,16 +68,18 @@ npm start
 
 ## Usage
 
-1. **Upload Files**: Drag and drop or click to select CSV, Parquet, or Excel files
+1. **Upload Files**: Drag and drop or click to select CSV, Parquet, or Excel files (multi-sheet supported)
 2. **View Tables**: See all registered tables in the "Available Tables" section
-3. **Write Queries**: Use the SQL editor to write queries against your data
-4. **View Results**: Results are displayed in a paginated table below the editor
+3. **Explore Files**: Click the "Explore" button next to any file to view metadata and copy column names
+4. **Write Queries**: Use the SQL editor to write queries against your data
+5. **View Results**: Results are displayed in a paginated table below the editor
+6. **Remove/Overwrite**: Remove tables/files or upload a file with the same name to overwrite
 
 ## File Support
 
 - **CSV**: Automatically detected and parsed with DuckDB's CSV reader
 - **Parquet**: Native support through DuckDB's Parquet scanner
-- **Excel**: Parsed using the xlsx library and inserted as SQL data
+- **Excel**: Parsed using the xlsx library and inserted as SQL data; multi-sheet import supported
 
 ## Query Examples
 
@@ -97,7 +110,7 @@ duckdb-wasm-browser/
 │   ├── page.tsx            # Main application page
 │   └── globals.css         # Global styles
 ├── components/
-│   ├── FileSelector.tsx    # File upload with drag & drop
+│   ├── FileSelector.tsx    # File upload, explorer modal, drag & drop
 │   ├── TableList.tsx       # Display registered tables
 │   ├── QueryEditor.tsx     # Monaco Editor for SQL
 │   └── ResultTable.tsx     # Paginated results display
@@ -130,15 +143,15 @@ This application is designed to be deployed as a static site. You can deploy it 
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## Code of Conduct
+
+See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
 ## License
 
-MIT License - see LICENSE file for details
+MIT License - see [LICENSE](LICENSE) for details
 
 ## Acknowledgments
 

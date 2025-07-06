@@ -29,7 +29,7 @@ function MainContent() {
               </div>
               <div className="ml-3">
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  DuckDB Browser
+                  Files Explorer
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   Analyze CSV, Parquet, and Excel files in your browser
