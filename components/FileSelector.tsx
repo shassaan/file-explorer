@@ -5,7 +5,7 @@ import { useDuckDB } from '../context/DuckDBContext';
 import * as XLSX from 'xlsx';
 
 export default function FileSelector() {
-  const { registerFile, isLoading, error, clearError, tables, removeTable } = useDuckDB();
+  const { registerFile, isLoading, error, clearError, tables, removeTable, executeQuery } = useDuckDB();
   const [isDragOver, setIsDragOver] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [excelSheetModal, setExcelSheetModal] = useState<{
@@ -13,6 +13,18 @@ export default function FileSelector() {
     sheetNames: string[];
   } | null>(null);
   const [selectedSheets, setSelectedSheets] = useState<string[]>([]);
+  const [exploreModal, setExploreModal] = useState<{
+    file: File;
+    tableName: string;
+    details: null | {
+      rowCount: number;
+      columns: string[];
+      columnCount: number;
+      fileSizeMB: string;
+    };
+    loading: boolean;
+    error: string | null;
+  } | null>(null);
 
   const handleFileSelect = useCallback(async (files: FileList | File[]) => {
     const fileArray = Array.from(files);
@@ -96,6 +108,67 @@ export default function FileSelector() {
       await removeTable(t.name);
     }
     setSelectedFiles(prev => prev.filter(f => f !== file));
+  };
+
+  // Explore file/table details
+  const handleExploreFile = async (file: File) => {
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    const baseName = file.name.replace(/\.[^.]+$/, '');
+    const table = tables.find(t => t.fileName === file.name || t.fileName.startsWith(baseName));
+    if (!table) return;
+    setExploreModal({
+      file,
+      tableName: table.name,
+      details: null,
+      loading: true,
+      error: null
+    });
+    try {
+      // Get column info
+      const describeRes = await executeQueryWithResult(`DESCRIBE ${table.name}`);
+      // Robustly extract column names
+      let columns: string[] = [];
+      if (Array.isArray(describeRes.rows[0])) {
+        columns = describeRes.rows.map((row: any[]) => row[0]);
+      } else if (typeof describeRes.rows[0] === 'object') {
+        columns = describeRes.rows.map((row: Record<string, any>) => row['column_name'] || Object.values(row)[0]);
+      }
+      // Get row count
+      const countRes = await executeQueryWithResult(`SELECT COUNT(*) as cnt FROM ${table.name}`);
+      let rowCount = 0;
+      if (Array.isArray(countRes.rows[0])) {
+        rowCount = countRes.rows[0][0];
+      } else if (typeof countRes.rows[0] === 'object') {
+        rowCount = countRes.rows[0].cnt ?? Object.values(countRes.rows[0])[0];
+      }
+      setExploreModal({
+        file,
+        tableName: table.name,
+        details: {
+          rowCount,
+          columns,
+          columnCount: columns.length,
+          fileSizeMB: (file.size / 1024 / 1024).toFixed(2)
+        },
+        loading: false,
+        error: null
+      });
+    } catch (err) {
+      setExploreModal({
+        file,
+        tableName: table.name,
+        details: null,
+        loading: false,
+        error: err instanceof Error ? err.message : 'Failed to get table details'
+      });
+    }
+  };
+
+  // Helper to run a query and get result (not just set context result)
+  const executeQueryWithResult = async (sql: string) => {
+    // Use the runQuery helper directly from lib/duckdb
+    const { runQuery } = await import('../lib/duckdb');
+    return runQuery(sql);
   };
 
   return (
@@ -242,6 +315,76 @@ export default function FileSelector() {
         </div>
       )}
 
+      {/* Explore File Modal */}
+      {exploreModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-8 w-full max-w-lg border border-gray-200 dark:border-gray-700 relative animate-fade-in">
+            <button
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition"
+              onClick={() => setExploreModal(null)}
+              aria-label="Close"
+            >
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <h3 className="text-2xl font-bold mb-6 text-gray-900 dark:text-white text-center tracking-tight">File/Table Details</h3>
+            {exploreModal.loading ? (
+              <div className="text-center text-gray-600 dark:text-gray-300 py-8">Loading...</div>
+            ) : exploreModal.error ? (
+              <div className="text-red-600 dark:text-red-400 text-center py-8">{exploreModal.error}</div>
+            ) : (
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                  <div className="font-semibold text-gray-700 dark:text-gray-300">File Name</div>
+                  <div className="truncate text-gray-900 dark:text-white" title={exploreModal.file.name}>{exploreModal.file.name}</div>
+                  <div className="font-semibold text-gray-700 dark:text-gray-300">Table Name</div>
+                  <div className="truncate text-gray-900 dark:text-white" title={exploreModal.tableName}>{exploreModal.tableName}</div>
+                  <div className="font-semibold text-gray-700 dark:text-gray-300">File Size</div>
+                  <div className="text-gray-900 dark:text-white">{exploreModal.details?.fileSizeMB} MB</div>
+                  <div className="font-semibold text-gray-700 dark:text-gray-300">Row Count</div>
+                  <div className="text-gray-900 dark:text-white">{exploreModal.details?.rowCount}</div>
+                  <div className="font-semibold text-gray-700 dark:text-gray-300">Column Count</div>
+                  <div className="text-gray-900 dark:text-white">{exploreModal.details?.columnCount}</div>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-semibold text-gray-700 dark:text-gray-300">Columns</span>
+                    <button
+                      className="text-xs px-2 py-1 rounded bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200 hover:bg-blue-200 dark:hover:bg-blue-800 transition"
+                      onClick={() => {
+                        if (exploreModal.details?.columns) {
+                          navigator.clipboard.writeText(exploreModal.details.columns.join(', '));
+                        }
+                      }}
+                    >
+                      Copy All
+                    </button>
+                  </div>
+                  <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-3 max-h-40 overflow-y-auto border border-gray-200 dark:border-gray-700 text-xs font-mono text-gray-800 dark:text-gray-100 whitespace-pre-wrap select-all">
+                    {exploreModal.details?.columns.map((col, idx) => (
+                      <div key={col} className="flex items-center group hover:bg-blue-50 dark:hover:bg-blue-900 rounded px-1">
+                        <span className="flex-1 break-all">{col}</span>
+                        <button
+                          className="ml-2 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 transition"
+                          title="Copy column name"
+                          onClick={() => navigator.clipboard.writeText(col)}
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Selected Files List */}
       {selectedFiles.length > 0 && (
         <div className="mt-6">
@@ -273,6 +416,12 @@ export default function FileSelector() {
                   <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
                     {file.name.split('.').pop()?.toUpperCase()}
                   </span>
+                  <button
+                    className="ml-2 px-2 py-1 rounded bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-800 text-xs"
+                    onClick={() => handleExploreFile(file)}
+                  >
+                    Explore
+                  </button>
                   <button
                     className="ml-2 px-2 py-1 rounded bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900 dark:text-red-200 dark:hover:bg-red-800 text-xs"
                     onClick={() => handleRemoveFile(file)}
