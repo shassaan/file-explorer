@@ -188,7 +188,6 @@ export async function runQuery(sql: string): Promise<{ columns: string[]; rows: 
   const rows = result.toArray();
   
   // Convert BigInt values to serializable types
-  const serializableRows = convertBigIntValues(rows) as unknown[];
-  
+  const serializableRows = convertBigIntValues(rows) as unknown[];  
   return { columns, rows: serializableRows };
 } 

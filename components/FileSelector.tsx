@@ -2,11 +2,17 @@
 
 import React, { useState, useCallback } from 'react';
 import { useDuckDB } from '../context/DuckDBContext';
+import * as XLSX from 'xlsx';
 
 export default function FileSelector() {
-  const { registerFile, isLoading, error, clearError } = useDuckDB();
+  const { registerFile, isLoading, error, clearError, tables, removeTable } = useDuckDB();
   const [isDragOver, setIsDragOver] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [excelSheetModal, setExcelSheetModal] = useState<{
+    file: File;
+    sheetNames: string[];
+  } | null>(null);
+  const [selectedSheets, setSelectedSheets] = useState<string[]>([]);
 
   const handleFileSelect = useCallback(async (files: FileList | File[]) => {
     const fileArray = Array.from(files);
@@ -20,12 +26,20 @@ export default function FileSelector() {
       return;
     }
 
-    setSelectedFiles(validFiles);
     clearError();
 
-    // Register each file
     for (const file of validFiles) {
-      await registerFile(file);
+      const ext = file.name.split('.').pop()?.toLowerCase();
+      if (ext === 'xlsx' || ext === 'xls') {
+        // Parse Excel and show sheet picker
+        const buffer = await file.arrayBuffer();
+        const workbook = XLSX.read(buffer, { type: 'array' });
+        setExcelSheetModal({ file, sheetNames: workbook.SheetNames });
+        return; // Only handle one Excel at a time for now
+      } else {
+        await registerFile(file);
+        setSelectedFiles(prev => [...prev, file]);
+      }
     }
   }, [registerFile, clearError]);
 
@@ -50,6 +64,38 @@ export default function FileSelector() {
       handleFileSelect(e.target.files);
     }
   }, [handleFileSelect]);
+
+  // Handle Excel sheet selection
+  const handleExcelSheetImport = async () => {
+    if (!excelSheetModal) return;
+    const { file } = excelSheetModal;
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer, { type: 'array' });
+    for (const sheetName of selectedSheets) {
+      const worksheet = workbook.Sheets[sheetName];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+      if (jsonData.length === 0) continue;
+      const headers = jsonData[0] as string[];
+      const rows = jsonData.slice(1) as unknown[][];
+      // Create a new File object for each sheet (simulate per-sheet upload)
+      const sheetFile = new File([file], `${file.name.replace(/\.[^.]+$/, '')}_${sheetName}.xlsx`, { type: file.type });
+      await registerFile(sheetFile);
+      setSelectedFiles(prev => [...prev, sheetFile]);
+    }
+    setExcelSheetModal(null);
+    setSelectedSheets([]);
+  };
+
+  // Remove file/table
+  const handleRemoveFile = async (file: File) => {
+    // Find the table(s) associated with this file
+    const baseName = file.name.replace(/\.[^.]+$/, '');
+    const relatedTables = tables.filter(t => t.fileName.startsWith(baseName));
+    for (const t of relatedTables) {
+      await removeTable(t.name);
+    }
+    setSelectedFiles(prev => prev.filter(f => f !== file));
+  };
 
   return (
     <div className="w-full max-w-4xl mx-auto p-6">
@@ -153,6 +199,48 @@ export default function FileSelector() {
         )}
       </div>
 
+      {/* Excel Sheet Picker Modal */}
+      {excelSheetModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-white">Select Sheet(s) to Import</h3>
+            <div className="mb-4">
+              {excelSheetModal.sheetNames.map(sheet => (
+                <label key={sheet} className="flex items-center space-x-2 mb-2">
+                  <input
+                    type="checkbox"
+                    checked={selectedSheets.includes(sheet)}
+                    onChange={e => {
+                      setSelectedSheets(prev =>
+                        e.target.checked
+                          ? [...prev, sheet]
+                          : prev.filter(s => s !== sheet)
+                      );
+                    }}
+                  />
+                  <span className="text-gray-800 dark:text-gray-200">{sheet}</span>
+                </label>
+              ))}
+            </div>
+            <div className="flex justify-end space-x-2">
+              <button
+                className="px-4 py-2 rounded bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200"
+                onClick={() => { setExcelSheetModal(null); setSelectedSheets([]); }}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 rounded bg-blue-600 text-white disabled:opacity-50"
+                disabled={selectedSheets.length === 0}
+                onClick={handleExcelSheetImport}
+              >
+                Import
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Selected Files List */}
       {selectedFiles.length > 0 && (
         <div className="mt-6">
@@ -180,10 +268,16 @@ export default function FileSelector() {
                     </p>
                   </div>
                 </div>
-                <div className="flex-shrink-0">
+                <div className="flex items-center space-x-2">
                   <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
                     {file.name.split('.').pop()?.toUpperCase()}
                   </span>
+                  <button
+                    className="ml-2 px-2 py-1 rounded bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900 dark:text-red-200 dark:hover:bg-red-800 text-xs"
+                    onClick={() => handleRemoveFile(file)}
+                  >
+                    Remove
+                  </button>
                 </div>
               </div>
             ))}

@@ -29,6 +29,7 @@ interface DuckDBContextType {
   registerFile: (file: File) => Promise<void>;
   executeQuery: (sql: string) => Promise<void>;
   clearError: () => void;
+  removeTable: (tableName: string) => Promise<void>;
 }
 
 const DuckDBContext = createContext<DuckDBContextType | undefined>(undefined);
@@ -89,15 +90,21 @@ export function DuckDBProvider({ children }: DuckDBProviderProps) {
     try {
       const ext = file.name.split('.').pop()?.toLowerCase() || '';
       const tableName = generateTableName(file.name, ext);
-      
+
+      // Overwrite: Drop existing table and remove from state if exists
+      if (tables.some(t => t.name === tableName)) {
+        await runQuery(`DROP TABLE IF EXISTS ${tableName}`);
+        setTables(prev => prev.filter(t => t.name !== tableName));
+      }
+
       await registerFileAsTable(file, tableName);
-      
+
       const newTable: TableInfo = {
         name: tableName,
         fileType: ext,
         fileName: file.name
       };
-      
+
       setTables(prev => [...prev, newTable]);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to register file');
@@ -130,6 +137,19 @@ export function DuckDBProvider({ children }: DuckDBProviderProps) {
     setError(null);
   };
 
+  const removeTable = async (tableName: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await runQuery(`DROP TABLE IF EXISTS ${tableName}`);
+      setTables(prev => prev.filter(t => t.name !== tableName));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to remove table');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Generate unique table names
   const generateTableName = (fileName: string, ext: string): string => {
     const baseName = fileName.replace(`.${ext}`, '').replace(/[^a-zA-Z0-9]/g, '_');
@@ -157,7 +177,8 @@ export function DuckDBProvider({ children }: DuckDBProviderProps) {
     initializeDuckDB,
     registerFile,
     executeQuery,
-    clearError
+    clearError,
+    removeTable
   };
 
   return (
