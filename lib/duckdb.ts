@@ -128,5 +128,42 @@ export async function runQuery(sql: string): Promise<{ columns: string[]; rows: 
   const result = await conn.query(sql);
   const columns = result.schema.fields.map((f) => f.name);
   const rows = result.toArray();
-  return { columns, rows };
+  
+  // Convert BigInt values to numbers or strings to avoid serialization issues
+  const serializableRows = rows.map(row => {
+    // Handle different row formats - DuckDB might return objects or arrays
+    if (Array.isArray(row)) {
+      return row.map((value: unknown) => {
+        if (typeof value === 'bigint') {
+          // Convert BigInt to number if it's within safe integer range, otherwise to string
+          const numValue = Number(value);
+          if (Number.isSafeInteger(numValue)) {
+            return numValue;
+          } else {
+            return value.toString();
+          }
+        }
+        return value;
+      });
+    } else if (typeof row === 'object' && row !== null) {
+      // If row is an object, convert BigInt values in the object
+      const convertedRow: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(row)) {
+        if (typeof value === 'bigint') {
+          const numValue = Number(value);
+          if (Number.isSafeInteger(numValue)) {
+            convertedRow[key] = numValue;
+          } else {
+            convertedRow[key] = value.toString();
+          }
+        } else {
+          convertedRow[key] = value;
+        }
+      }
+      return convertedRow;
+    }
+    return row;
+  });
+  
+  return { columns, rows: serializableRows };
 } 

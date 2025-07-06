@@ -106,16 +106,28 @@ export default function ResultTable() {
                   key={rowIndex}
                   className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                 >
-                  {queryResult.columns.map((column, colIndex) => (
-                    <td
-                      key={colIndex}
-                      className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white"
-                    >
-                      <div className="max-w-xs truncate" title={String(row[column] ?? '')}>
-                        {formatCellValue(row[column])}
-                      </div>
-                    </td>
-                  ))}
+                  {queryResult.columns.map((column, colIndex) => {
+                    // Handle both array and object row formats
+                    let cellValue: unknown;
+                    if (Array.isArray(row)) {
+                      cellValue = row[colIndex];
+                    } else if (typeof row === 'object' && row !== null) {
+                      cellValue = (row as Record<string, unknown>)[column];
+                    } else {
+                      cellValue = row;
+                    }
+                    
+                    return (
+                      <td
+                        key={colIndex}
+                        className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white"
+                      >
+                        <div className="max-w-xs truncate" title={String(cellValue ?? '')}>
+                          {formatCellValue(cellValue)}
+                        </div>
+                      </td>
+                    );
+                  })}
                 </tr>
               ))}
             </tbody>
