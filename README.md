@@ -1,36 +1,148 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# DuckDB Browser
+
+A fully frontend-only Next.js application that uses DuckDB WASM to allow users to query local CSV, Parquet, and Excel files in the browser without uploading them to a server.
+
+## Features
+
+- **Drag & Drop File Upload**: Support for CSV, Parquet, and Excel files
+- **Automatic Table Generation**: Files are automatically registered as DuckDB tables with unique names
+- **SQL Query Editor**: Monaco Editor with SQL syntax highlighting and auto-completion
+- **Modern Results Display**: Paginated table view with sorting and formatting
+- **Real-time Processing**: All data processing happens in the browser using WebAssembly
+- **Dark Mode Support**: Beautiful UI with light and dark theme support
+- **No Server Required**: Completely static deployment with no backend dependencies
+
+## Tech Stack
+
+- **Frontend**: Next.js 15 with App Router
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS
+- **Database**: DuckDB WASM
+- **Editor**: Monaco Editor (VS Code's editor)
+- **File Processing**: xlsx for Excel files, built-in CSV/Parquet support
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
 
+- Node.js 18+ 
+- npm or yarn
+
+### Installation
+
+1. Clone the repository:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone <repository-url>
+cd duckdb-wasm-browser
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Install dependencies:
+```bash
+npm install
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+3. Run the development server:
+```bash
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+4. Open [http://localhost:3000](http://localhost:3000) in your browser
 
-## Learn More
+### Building for Production
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm run build
+npm start
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Usage
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. **Upload Files**: Drag and drop or click to select CSV, Parquet, or Excel files
+2. **View Tables**: See all registered tables in the "Available Tables" section
+3. **Write Queries**: Use the SQL editor to write queries against your data
+4. **View Results**: Results are displayed in a paginated table below the editor
 
-## Deploy on Vercel
+## File Support
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- **CSV**: Automatically detected and parsed with DuckDB's CSV reader
+- **Parquet**: Native support through DuckDB's Parquet scanner
+- **Excel**: Parsed using the xlsx library and inserted as SQL data
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Query Examples
+
+```sql
+-- View all data from a table
+SELECT * FROM file_csv_1 LIMIT 10;
+
+-- Basic filtering
+SELECT * FROM file_csv_1 WHERE column_name = 'value';
+
+-- Aggregations
+SELECT column_name, COUNT(*) as count 
+FROM file_csv_1 
+GROUP BY column_name;
+
+-- Joins between tables
+SELECT a.*, b.column_name 
+FROM file_csv_1 a 
+JOIN file_parquet_2 b ON a.id = b.id;
+```
+
+## Project Structure
+
+```
+duckdb-wasm-browser/
+├── app/
+│   ├── layout.tsx          # Root layout with metadata
+│   ├── page.tsx            # Main application page
+│   └── globals.css         # Global styles
+├── components/
+│   ├── FileSelector.tsx    # File upload with drag & drop
+│   ├── TableList.tsx       # Display registered tables
+│   ├── QueryEditor.tsx     # Monaco Editor for SQL
+│   └── ResultTable.tsx     # Paginated results display
+├── context/
+│   └── DuckDBContext.tsx   # React Context for state management
+├── lib/
+│   └── duckdb.ts           # DuckDB initialization and helpers
+└── package.json
+```
+
+## Deployment
+
+This application is designed to be deployed as a static site. You can deploy it to:
+
+- **Vercel**: `vercel --prod`
+- **Netlify**: `npm run build && netlify deploy --prod --dir=out`
+- **GitHub Pages**: Configure for static export
+
+## Browser Compatibility
+
+- Chrome/Edge: Full support
+- Firefox: Full support
+- Safari: Full support (may require HTTPS for WebAssembly)
+
+## Performance Considerations
+
+- Large files (>100MB) may cause browser memory issues
+- Excel files are processed row-by-row, so very large Excel files may be slow
+- DuckDB WASM loads ~10MB of WebAssembly code on first use
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
+
+## License
+
+MIT License - see LICENSE file for details
+
+## Acknowledgments
+
+- [DuckDB](https://duckdb.org/) for the amazing analytical database
+- [Monaco Editor](https://microsoft.github.io/monaco-editor/) for the code editor
+- [Next.js](https://nextjs.org/) for the React framework
+- [Tailwind CSS](https://tailwindcss.com/) for the styling system

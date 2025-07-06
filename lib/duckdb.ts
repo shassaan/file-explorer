@@ -1,0 +1,132 @@
+import { AsyncDuckDB, AsyncDuckDBConnection, selectBundle, DuckDBDataProtocol, ConsoleLogger } from '@duckdb/duckdb-wasm';
+import * as XLSX from 'xlsx';
+
+// Singleton DuckDB instance and connection
+let db: AsyncDuckDB | null = null;
+let conn: AsyncDuckDBConnection | null = null;
+
+// Helper to initialize DuckDB WASM
+export async function initDuckDB(): Promise<{ db: AsyncDuckDB, conn: AsyncDuckDBConnection }> {
+  if (db && conn) return { db, conn };
+
+  try {
+    console.log('Initializing DuckDB WASM...');
+    
+    // Use local bundles for DuckDB WASM
+    const bundles = {
+      eh: {
+        mainModule: '/duckdb/duckdb-eh.wasm',
+        mainWorker: '/duckdb/duckdb-browser-eh.worker.js',
+        pthreadWorker: null,
+      },
+      mvp: {
+        mainModule: '/duckdb/duckdb-mvp.wasm',
+        mainWorker: '/duckdb/duckdb-browser-mvp.worker.js',
+        pthreadWorker: null,
+      },
+    };
+    
+    console.log('Selecting DuckDB bundle...');
+    const bundle = await selectBundle(bundles);
+    console.log('Selected bundle:', bundle);
+
+    // Create a logger and worker for DuckDB
+    const logger = new ConsoleLogger();
+    if (!bundle.mainWorker) throw new Error('No mainWorker found in selected DuckDB bundle');
+    
+    console.log('Creating DuckDB worker...');
+    const worker = new Worker(bundle.mainWorker as string);
+    
+    console.log('Creating AsyncDuckDB instance...');
+    db = new AsyncDuckDB(logger, worker);
+    
+    console.log('Instantiating DuckDB...');
+    await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+    
+    console.log('Connecting to DuckDB...');
+    conn = await db.connect();
+    
+    console.log('DuckDB initialization complete!');
+    return { db, conn };
+  } catch (error) {
+    console.error('DuckDB initialization failed:', error);
+    throw error;
+  }
+}
+
+// Helper to register a file as a table in DuckDB
+export async function registerFileAsTable(
+  file: File,
+  tableName: string
+): Promise<void> {
+  if (!db || !conn) throw new Error('DuckDB not initialized');
+  const ext = file.name.split('.').pop()?.toLowerCase();
+  
+  // Register file as a DuckDB table depending on type
+  if (ext === 'csv') {
+    // For CSV files, use DuckDB's built-in CSV reader
+    await db.registerFileHandle(`memory://${file.name}`, file, DuckDBDataProtocol.BROWSER_FILEREADER, true);
+    await conn.query(
+      `CREATE TABLE ${tableName} AS SELECT * FROM read_csv_auto('memory://${file.name}')`
+    );
+  } else if (ext === 'parquet') {
+    // For Parquet files, use DuckDB's built-in Parquet reader
+    await db.registerFileHandle(`memory://${file.name}`, file, DuckDBDataProtocol.BROWSER_FILEREADER, true);
+    await conn.query(
+      `CREATE TABLE ${tableName} AS SELECT * FROM parquet_scan('memory://${file.name}')`
+    );
+  } else if (ext === 'xlsx' || ext === 'xls') {
+    // For Excel files, parse with xlsx library and insert data
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer, { type: 'array' });
+    const sheetName = workbook.SheetNames[0]; // Use first sheet
+    const worksheet = workbook.Sheets[sheetName];
+    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+    
+    if (jsonData.length === 0) {
+      throw new Error('Excel file is empty or could not be parsed');
+    }
+    
+    const headers = jsonData[0] as string[];
+    const rows = jsonData.slice(1) as unknown[][];
+    
+    // Create table with headers
+    const columns = headers.map((header) => 
+      `"${header || `column_${headers.indexOf(header)}`}" VARCHAR`
+    ).join(', ');
+    
+    await conn.query(`CREATE TABLE ${tableName} (${columns})`);
+    
+    // Insert data row by row
+    for (const row of rows) {
+      if (row.length > 0) {
+        const values = row.map((value) => {
+          if (value === null || value === undefined) {
+            return 'NULL';
+          }
+          // Escape single quotes and wrap in quotes
+          const escapedValue = String(value).replace(/'/g, "''");
+          return `'${escapedValue}'`;
+        });
+        
+        // Pad with NULL values if row is shorter than headers
+        while (values.length < headers.length) {
+          values.push('NULL');
+        }
+        
+        await conn.query(`INSERT INTO ${tableName} VALUES (${values.join(', ')})`);
+      }
+    }
+  } else {
+    throw new Error('Unsupported file type');
+  }
+}
+
+// Helper to run a query and return results
+export async function runQuery(sql: string): Promise<{ columns: string[]; rows: unknown[] }> {
+  if (!conn) throw new Error('DuckDB connection not initialized');
+  const result = await conn.query(sql);
+  const columns = result.schema.fields.map((f) => f.name);
+  const rows = result.toArray();
+  return { columns, rows };
+} 
