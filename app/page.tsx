@@ -79,18 +79,9 @@ function MainContent() {
               >
                 DuckDB
               </a>
-              {' '}and{' '}
-              <a
-                href="https://nextjs.org/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
-              >
-                Next.js
-              </a>
             </p>
             <p className="mt-1">
-              All processing happens in your browser - no data is uploaded to any server
+              © 2025 Syed Hassaan Ahmed. All rights reserved.
             </p>
           </div>
         </div>

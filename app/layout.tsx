@@ -12,9 +12,9 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "DuckDB Browser - Analyze Data Files in Your Browser",
-  description: "A fully frontend-only application that uses DuckDB WASM to allow users to query local CSV, Parquet, and Excel files in the browser without uploading them to a server.",
+export const metadata = {
+  title: 'Files Explorer',
+  description: 'Query CSV, Parquet, and Excel files in your browser with DuckDB WASM',
 };
 
 export default function RootLayout({
