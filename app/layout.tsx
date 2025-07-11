@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 
 export const metadata = {
   title: 'Files Explorer',
-  description: 'Query CSV, Parquet, and Excel files in your browser with DuckDB WASM',
+  description: 'Query and Export CSV, Parquet, and Excel files in your browser',
 };
 
 export default function RootLayout({
