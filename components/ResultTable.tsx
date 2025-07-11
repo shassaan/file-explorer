@@ -71,6 +71,55 @@ export default function ResultTable() {
 
   const { data, totalPages, totalRows } = paginatedData;
 
+  // --- Export helpers ---
+  function exportAsCSV() {
+    if (!queryResult) return;
+    const { columns, rows } = queryResult;
+    const csvRows = [
+      columns.join(','),
+      ...rows.map(row =>
+        columns.map((col, i) => {
+          let cell = Array.isArray(row) ? row[i] : row[col];
+          if (cell === null || cell === undefined) return '';
+          const str = String(cell);
+          // Escape quotes and commas
+          if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+            return '"' + str.replace(/"/g, '""') + '"';
+          }
+          return str;
+        }).join(',')
+      )
+    ];
+    const csvContent = csvRows.join('\n');
+    downloadFile(csvContent, 'query_result.csv', 'text/csv');
+  }
+
+  function exportAsJSON() {
+    if (!queryResult) return;
+    const { columns, rows } = queryResult;
+    // Convert rows to array of objects for JSON
+    const data = rows.map(row => {
+      const obj = {};
+      columns.forEach((col, i) => {
+        obj[col] = Array.isArray(row) ? row[i] : row[col];
+      });
+      return obj;
+    });
+    const jsonContent = JSON.stringify(data, null, 2);
+    downloadFile(jsonContent, 'query_result.json', 'application/json');
+  }
+
+  function downloadFile(content: string, filename: string, mimeType: string) {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+  // --- End export helpers ---
+
   return (
     <div className="w-full max-w-4xl mx-auto p-6">
       <div className="mb-6">
@@ -81,6 +130,23 @@ export default function ResultTable() {
           {totalRows} row{totalRows !== 1 ? 's' : ''} returned
           {totalPages > 1 && ` • Page ${currentPage} of ${totalPages}`}
         </p>
+        {/* Export Buttons */}
+        {queryResult && queryResult.rows.length > 0 && (
+          <div className="flex gap-2 mt-4">
+            <button
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm font-medium"
+              onClick={exportAsCSV}
+            >
+              Export CSV
+            </button>
+            <button
+              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-sm font-medium"
+              onClick={exportAsJSON}
+            >
+              Export JSON
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="bg-white dark:bg-gray-900 shadow overflow-hidden sm:rounded-lg">
