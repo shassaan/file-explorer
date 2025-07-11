@@ -79,7 +79,7 @@ export default function ResultTable() {
       columns.join(','),
       ...rows.map(row =>
         columns.map((col, i) => {
-          let cell = Array.isArray(row) ? row[i] : row[col];
+          const cell = Array.isArray(row) ? row[i] : row[col];
           if (cell === null || cell === undefined) return '';
           const str = String(cell);
           // Escape quotes and commas
