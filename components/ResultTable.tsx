@@ -5,6 +5,9 @@ import { useDuckDB } from '../context/DuckDBContext';
 
 const ITEMS_PER_PAGE = 50;
 
+// Type for row values in query results
+type RowValue = string | number | boolean | null | undefined | object;
+
 export default function ResultTable() {
   const { queryResult, isQueryRunning } = useDuckDB();
   const [currentPage, setCurrentPage] = useState(1);
@@ -99,7 +102,7 @@ export default function ResultTable() {
     const { columns, rows } = queryResult;
     // Convert rows to array of objects for JSON
     const data = rows.map(row => {
-      const obj = {};
+      const obj: Record<string, RowValue> = {};
       columns.forEach((col, i) => {
         obj[col] = Array.isArray(row) ? row[i] : row[col];
       });
